@@ -98,3 +98,37 @@ Entonces el Mono termina en error con la excepción default de WebClient (WebCli
 ```
 Cubierto por: `WebClientEntityFactoryTest#testGetResourcePropagatesHttpErrorWithoutTranslation`
 (nuevo — no existía cobertura para este camino).
+
+### `PokeApiReactorBaseConfiguration` (`skaro.pokeapi`)
+
+Antes de esta etapa, las 4 clases `@Configuration` del proyecto no tenían
+ningún test (`docs/AS-IS.md` § Zonas sin cobertura) — los 3 escenarios de
+esta sección son cobertura nueva, no trazabilidad de tests preexistentes.
+
+#### Escenario: cada request saliente a PokéAPI se loguea en INFO con método + URL
+```gherkin
+Dado el WebClient construido por PokeApiReactorBaseConfiguration
+Cuando se hace un GET a "/pokemon/1"
+Entonces se loguea, en el logger de PokeApiEntityFactory, un mensaje en nivel INFO
+Y el mensaje contiene el método HTTP y la URL completa de la request
+```
+Cubierto por: `PokeApiReactorBaseConfigurationTest#logueaCadaRequestSalienteEnInfo`.
+
+#### Escenario: la deserialización usa snake_case automático
+```gherkin
+Dado un JSON de respuesta con la propiedad "base_experience"
+Cuando se decodifica con el decoder configurado (jsonDecoder())
+Entonces el campo baseExperience del DTO queda seteado con ese valor
+```
+Cubierto por: `PokeApiReactorBaseConfigurationTest#deserializaPropiedadesSnakeCaseACamelCase`.
+
+#### Escenario: deserializar una propiedad desconocida del JSON de origen falla
+```gherkin
+Dado un JSON de respuesta con una propiedad que no existe en el DTO destino
+Cuando se decodifica con el decoder configurado (jsonDecoder())
+Entonces el Mono termina en error con DecodingException, causada por UnrecognizedPropertyException
+# Corregido respecto del hallazgo original de la arqueología (AS-IS rareza #2):
+# antes se ignoraba en silencio. Se preserva el nuevo comportamiento hasta que
+# una spec lo cambie a propósito.
+```
+Cubierto por: `PokeApiReactorBaseConfigurationTest#fallaAlDeserializarUnaPropiedadDesconocida`.
