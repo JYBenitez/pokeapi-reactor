@@ -62,7 +62,7 @@ public class ReactiveCacheManagerCacheFacade implements CacheFacade {
 	private <T extends PokeApiResource> Mono<Void> writeToCache(Class<T> cls, String key, Signal<? extends T> value) {
 		String cacheName = getCacheNameForClassResource(cls);
 		Consumer<Cache> writeToCache = cache -> cache.put(key, value);
-		Runnable logCacheFailure = () -> LOG.warn("Cache '{}' does not exist. Could not cache PokeApi resource. Please ensure cache '{}' exists or allow lazy creation of caches.", 
+		Runnable logCacheFailure = () -> LOG.error("Cache '{}' does not exist. Could not cache PokeApi resource. Please ensure cache '{}' exists or allow lazy creation of caches.",
 				cacheName,
 				cacheName);
 
