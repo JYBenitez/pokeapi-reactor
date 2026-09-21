@@ -74,13 +74,17 @@ commit: base del challenge técnico"), remote `JYBenitez/pokeapi-reactor`.
   su propia app/servidor.
 - Cada request saliente a PokéAPI se loguea en INFO con método + URL
   (`PokeApiReactorBaseConfiguration.java:75-79`).
-- La deserialización JSON usa snake_case automático y **ignora en silencio**
+- La deserialización JSON usa snake_case automático y **falla** ante
   propiedades desconocidas del JSON de origen
-  (`PokeApiReactorBaseConfiguration.java:48-50`).
+  (`PokeApiReactorBaseConfiguration.java:48-50`). Corregido respecto del
+  hallazgo original de esta arqueología — ver Rareza #2: ignoraba estas
+  propiedades en silencio.
 - Con la configuración de cache activa, si el cache nombrado no existe en
   el `CacheManager`, el request se resuelve igual contra la red pero no se
-  cachea nada; solo se loguea un WARN
-  (`ReactiveCacheManagerCacheFacade.java:65-72`).
+  cachea nada; se loguea en **ERROR**
+  (`ReactiveCacheManagerCacheFacade.java:65-72`). Corregido respecto del
+  hallazgo original de esta arqueología — ver Rareza #3: antes solo
+  logueaba un WARN.
 - No hay manejo de errores HTTP propio: `.retrieve()` sin `onStatus`
   (`WebClientEntityFactory.java:29-36,41-45,50-58,62-66`) — un 404/500 de
   PokéAPI se propaga como excepción default de WebClient.
