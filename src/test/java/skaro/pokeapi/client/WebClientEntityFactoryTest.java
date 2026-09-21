@@ -18,6 +18,7 @@ import org.mockito.Mockito;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,6 +69,7 @@ public class WebClientEntityFactoryTest {
 		factory = new WebClientEntityFactory(webClient, registry); 
 	}
 	
+	// Spec 000 — Escenario: obtener un recurso por id o nombre
 	@Test
 	public void testGetResource() throws JsonProcessingException, InterruptedException {
 		String resourceEndpoint = "/pokemon";
@@ -90,6 +92,7 @@ public class WebClientEntityFactoryTest {
 		assertEquals(expectedEndpoint, recordedRequest.getPath());
 	}
 	
+	// Spec 000 — Escenario: obtener el listado completo de un tipo de recurso
 	@Test
 	public void testGetBaseResource() throws JsonProcessingException, InterruptedException {
 		String resourceEndpoint = "/move";
@@ -122,6 +125,7 @@ public class WebClientEntityFactoryTest {
 		assertEquals(resourceEndpoint, recordedRequest.getPath());
 	}
 	
+	// Spec 000 — Escenario: obtener el listado paginado de un tipo de recurso
 	@Test
 	public void testGetBaseResourceWithQuery() throws JsonProcessingException, InterruptedException {
 		String resourceEndpoint = "ability";
@@ -158,6 +162,7 @@ public class WebClientEntityFactoryTest {
 		assertEquals(query.getOffset().toString(), recordedRequest.getRequestUrl().queryParameter("offset"));
 	}
 	
+	// Spec 000 — Escenario: seguir el link de un recurso y obtener el recurso completo
 	@Test
 	public void getNamedResourceTest() throws JsonProcessingException, InterruptedException {
 		String namedResourceEndpoint = "item";
@@ -179,6 +184,7 @@ public class WebClientEntityFactoryTest {
 		assertEquals(expectedEndpoint, recordedRequest.getPath());
 	}
 	
+	// Spec 000 — Escenario: seguir una lista de links y obtener los recursos completos
 	@Test
 	public void getNamedResourcesTest() throws JsonProcessingException, InterruptedException {
 		String namedResourceEndpoint = "stat";
@@ -214,6 +220,22 @@ public class WebClientEntityFactoryTest {
 		}
 	}
 	
+	// Spec 000 — Escenario: un error HTTP de PokéAPI se propaga sin traducir a error de dominio
+	// No hay .onStatus() propio (dolor P8 de docs/AS-IS.md): un 404/500 llega tal cual
+	// como excepción default de WebClient. Se preserva hasta que una spec lo cambie a proposito.
+	@Test
+	public void testGetResourcePropagatesHttpErrorWithoutTranslation() {
+		String resourceEndpoint = "/pokemon";
+
+		Mockito.when(registry.getEndpoint(Pokemon.class))
+			.thenReturn(resourceEndpoint);
+		mockPokeApiServer.enqueue(new MockResponse().setResponseCode(404));
+
+		StepVerifier.create(factory.getResource(Pokemon.class, "inexistente"))
+			.expectError(WebClientResponseException.NotFound.class)
+			.verify();
+	}
+
 	private String getMockPokeApiServerBaseUrl() {
 		return String.format("http://localhost:%s", mockPokeApiServer.getPort());
 	}
