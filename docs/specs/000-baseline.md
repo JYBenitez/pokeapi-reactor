@@ -132,3 +132,45 @@ Entonces el Mono termina en error con DecodingException, causada por Unrecognize
 # una spec lo cambie a propósito.
 ```
 Cubierto por: `PokeApiReactorBaseConfigurationTest#fallaAlDeserializarUnaPropiedadDesconocida`.
+
+### `ReactiveCacheManagerCacheFacade` (`skaro.pokeapi.cache`)
+
+#### Escenario: cache hit devuelve el valor cacheado sin llamar al proveedor original
+```gherkin
+Dado un CacheSpec cuyo cache ya tiene un valor para la key
+Cuando se pide facade.get(cacheSpec)
+Entonces el Mono resuelve con el valor cacheado
+Y no se escribe de nuevo en el cache
+```
+Cubierto por: `ReactiveCacheManagerCacheFacadeTest#getTest_cacheHit`.
+
+#### Escenario: cache miss resuelve con el proveedor y cachea el resultado
+```gherkin
+Dado un CacheSpec cuyo cache existe pero no tiene valor para la key
+Cuando se pide facade.get(cacheSpec)
+Entonces el Mono resuelve con el valor del proveedor (orCache)
+Y el valor se escribe en el cache bajo esa key
+```
+Cubierto por: `ReactiveCacheManagerCacheFacadeTest#getTest_cacheMiss`.
+
+#### Escenario: cache nombrado inexistente resuelve igual contra el proveedor sin cachear, logueando ERROR
+```gherkin
+Dado un CacheSpec cuyo cache (nombrado por el FQCN del tipo) no existe en el CacheManager
+Cuando se pide facade.get(cacheSpec)
+Entonces el Mono resuelve con el valor del proveedor (orCache)
+Y no se realiza ningún put en ningún cache
+Y se loguea en ERROR un mensaje que menciona el nombre del cache
+# Degradación silenciosa corregida a ERROR (AS-IS rareza #3); el request
+# igual se resuelve sin cachear — eso no cambió, solo la visibilidad.
+```
+Cubierto por: `ReactiveCacheManagerCacheFacadeTest#getTest_cacheDoesNotExist`
+(la aserción del log es cobertura nueva — el test ya existía pero no
+verificaba el mensaje, solo que no se cacheaba).
+
+#### Escenario: getMany resuelve múltiples CacheSpecs en paralelo
+```gherkin
+Dado una lista de CacheSpecs, cada uno con su propio cache hit
+Cuando se pide facade.getMany(cacheSpecs)
+Entonces el Flux emite el valor de cada uno (Flux.merge, sin orden garantizado)
+```
+Cubierto por: `ReactiveCacheManagerCacheFacadeTest#getManyTest`.

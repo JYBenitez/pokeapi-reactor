@@ -1,6 +1,7 @@
 package skaro.pokeapi.cache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -20,6 +21,10 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.support.SimpleValueWrapper;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Signal;
 import reactor.test.StepVerifier;
@@ -40,6 +45,7 @@ public class ReactiveCacheManagerCacheFacadeTest {
 		this.facade = new ReactiveCacheManagerCacheFacade(cacheManager);
 	}
 	
+	// Spec 000 — Escenario: cache miss resuelve con el proveedor y cachea el resultado
 	@Test
 	@SuppressWarnings("unchecked")
 	public void getTest_cacheMiss() {
@@ -66,6 +72,7 @@ public class ReactiveCacheManagerCacheFacadeTest {
 		assertEquals(value, cachedValue);
 	}
 	
+	// Spec 000 — Escenario: cache hit devuelve el valor cacheado sin llamar al proveedor original
 	@Test
 	public void getTest_cacheHit() {
 		String key = UUID.randomUUID().toString();
@@ -87,25 +94,38 @@ public class ReactiveCacheManagerCacheFacadeTest {
 		verify(cache, never()).put(any(), any());
 	}
 	
+	// Spec 000 — Escenario: cache nombrado inexistente resuelve igual contra el proveedor
+	// sin cachear, logueando ERROR
 	@Test
 	public void getTest_cacheDoesNotExist() {
 		String key = UUID.randomUUID().toString();
 		Pokemon value = new Pokemon();
-		
+
 		when(cacheManager.getCache(value.getClass().getName()))
 			.thenReturn(null);
-		
+
 		CacheSpec<Pokemon> cacheSpec = CacheSpec.get(Pokemon.class, key)
 				.orCache(() -> Mono.just(value));
-		
+
+		Logger facadeLogger = (Logger) org.slf4j.LoggerFactory.getLogger(ReactiveCacheManagerCacheFacade.class);
+		ListAppender<ILoggingEvent> appender = new ListAppender<>();
+		appender.start();
+		facadeLogger.addAppender(appender);
+
 		StepVerifier.create(facade.get(cacheSpec))
 			.expectNext(value)
 			.expectComplete()
 			.verify();
-	
+
 		verify(cache, never()).put(any(), any());
+
+		facadeLogger.detachAppender(appender);
+		assertTrue(appender.list.stream().anyMatch(event ->
+				event.getLevel() == Level.ERROR
+				&& event.getFormattedMessage().contains(value.getClass().getName())));
 	}
 	
+	// Spec 000 — Escenario: getMany resuelve múltiples CacheSpecs en paralelo (Flux.merge)
 	@Test
 	public void getManyTest() {
 		String key1 = UUID.randomUUID().toString();
