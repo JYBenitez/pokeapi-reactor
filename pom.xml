@@ -103,12 +103,4 @@
 		</plugins>
 	</build>
 
-	<distributionManagement>
-		<repository>
-			<id>github</id>
-			<name>PokeAPI Reactor Packages</name>
-			<url>https://maven.pkg.github.com/SirSkaro/pokeapi-reactor</url>
-		</repository>
-	</distributionManagement>
-
 </project>
