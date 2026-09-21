@@ -47,7 +47,9 @@ public class PokeApiReactorBaseConfiguration {
 	public Jackson2JsonDecoder jsonDecoder() {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+		// Falla en vez de ignorar campos desconocidos: un cambio de contrato de
+		// PokéAPI tiene que ser visible, no absorbido en silencio (AS-IS rareza #2).
+		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
 
 		return new Jackson2JsonDecoder(mapper, MediaType.APPLICATION_JSON);
 	}
