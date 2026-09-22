@@ -1,6 +1,6 @@
 package skaro.pokeapi;
 
-import javax.validation.Valid;
+import jakarta.validation.Valid;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +20,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
@@ -46,16 +46,18 @@ public class PokeApiReactorBaseConfiguration {
 	@Bean(POKEAPI_JSON_DECODER_BEAN)
 	public Jackson2JsonDecoder jsonDecoder() {
 		ObjectMapper mapper = new ObjectMapper();
-		mapper.setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE);
-		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-		
+		mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+		// Falla en vez de ignorar campos desconocidos: un cambio de contrato de
+		// PokéAPI tiene que ser visible, no absorbido en silencio (AS-IS rareza #2).
+		mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
+
 		return new Jackson2JsonDecoder(mapper, MediaType.APPLICATION_JSON);
 	}
 	
 	@Bean(POKEAPI_JSON_ENCODER_BEAN)
 	public Jackson2JsonEncoder jsonEncoder() {
 		ObjectMapper mapper = new ObjectMapper();
-		mapper.setPropertyNamingStrategy(PropertyNamingStrategy.SNAKE_CASE);
+		mapper.setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
 		
 		return new Jackson2JsonEncoder(mapper, MediaType.APPLICATION_JSON);
 	}

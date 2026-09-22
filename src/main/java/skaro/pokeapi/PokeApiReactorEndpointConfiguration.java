@@ -99,7 +99,7 @@ public class PokeApiReactorEndpointConfiguration {
 		endpoints.put(PokemonHabitat.class, "pokemon-habitat");
 		endpoints.put(PokemonShape.class, "pokemon-shape");
 		endpoints.put(PokemonSpecies.class, "pokemon-species");
-		endpoints.put(Region.class, "pokemon-region");
+		endpoints.put(Region.class, "region");
 		endpoints.put(Stat.class, "stat");
 		endpoints.put(SuperContestEffect.class, "super-contest-effect");
 		endpoints.put(Type.class, "type");
