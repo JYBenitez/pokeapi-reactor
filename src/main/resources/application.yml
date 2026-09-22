@@ -1,0 +1,19 @@
+skaro:
+  pokeapi:
+    base-uri: https://pokeapi.co/api/v2/
+  trainer:
+    team-limit: 6
+    box-limit: 300
+    default-trainer-id: 1
+    pokeapi-call-timeout: 3s
+
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/pokeapi-reactor;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
