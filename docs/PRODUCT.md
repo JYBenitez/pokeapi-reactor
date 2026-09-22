@@ -25,20 +25,25 @@ aplica, el dolor del AS-IS (`docs/AS-IS.md`) que la motiva.
 
 | Tema | Decisión | Motivo / riesgo si cambia |
 |---|---|---|
-| Modelo de concurrencia (A5) | **Tentativo:** WebFlux + R2DBC end-to-end | Coherente con el cliente PokéAPI ya reactivo (Dolor P7). **A revisar en F4/DESIGN.md** de la spec de persistencia si el esfuerzo de R2DBC resulta desproporcionado; fallback preferido: WebFlux + JPA aislado en `Schedulers.boundedElastic()`, no un salto directo a MVC bloqueante. |
-| Motor de persistencia (A6) | H2 en **modo archivo** (no en memoria pura) vía R2DBC | Cero infraestructura externa para correr/demostrar el proyecto, pero sobrevive a un restart durante la charla técnica. Evolución a Postgres documentada en DESIGN.md como paso siguiente — el driver R2DBC abstrae la migración a solo cambiar connection string + dialecto. |
+| Modelo de concurrencia (A5) | **Revisado 2026-09-21 → WebFlux + JPA aislado en `Schedulers.boundedElastic()`** (reemplaza el tentativo original de R2DBC end-to-end) | Ver `## Cambios` al final de este documento y `docs/DESIGN.md` (D1) para el detalle completo y las alternativas descartadas. |
+| Motor de persistencia (A6) | H2 en **modo archivo** (no en memoria pura) vía JPA/Hibernate | Cero infraestructura externa para correr/demostrar el proyecto, pero sobrevive a un restart durante la charla técnica. Evolución a Postgres documentada en DESIGN.md como paso siguiente — cambiar connection string + dialecto. |
 | Límite Equipo Activo (A1) | **6**, configurable (no hardcodeado) | Valor canónico de los juegos oficiales. Mismo patrón de config que `maxBytesToBuffer` del AS-IS. |
 | Límite Baúl / PC Box (A2) | **300**, configurable (no hardcodeado) | Orden de magnitud de los juegos oficiales (múltiplos de cajas de 30). |
 | Prioridad de asignación al capturar (A3) | Equipo Activo primero, Baúl si está lleno | Comportamiento esperable para quien conozca el dominio; FR-019 solo pide "automático", no dice cuál gana. |
 | Sin espacio en ningún destino (A4) | **409 Conflict** con mensaje explicativo | Es un conflicto de estado del recurso (límites llenos), no un request mal formado — pesa directo en el criterio explícito de "manejo adecuado de códigos HTTP". |
 | Modelo de IVs (A8) | Se guarda **solo** el IV (0-31) por stat en el ejemplar. La "base" de la especie (el "arranca desde 1" del enunciado) se consulta on-demand vía `PokeApiClient` (`PokemonStat`, ya existe), no se duplica en nuestra DB | Evita un dato redundante que puede desincronizarse de PokéAPI; el IV es lo único genuinamente nuevo por ejemplar. |
 | Naturaleza — tabla completa (A7) | Se usa la tabla **oficial** de 25 naturalezas | No es ambigüedad real: las 5 "neutras" (Hardy, Docile, Serious, Bashful, Quirky) tienen el mismo stat como incrementado y decrementado — la regla "+10%/-10% siempre" del PRD se cumple sin excepción. Dato de dominio público, verificable, no una asunción de riesgo. |
-| Entrenador / OT (A9) | **Entidad de dominio propia**, no solo un campo id | Alineado con FR-012/013 (límites *por entrenador*); dejar la puerta abierta a auth futura sin remodelar. |
+| Entrenador / OT (A9) | **Entidad de dominio propia** (aggregate root de `PokemonInstance`), pero **fijo/único en esta entrega** — sin CRUD ni id variable, revisado 2026-09-21 en `docs/specs/001-equipo-activo-y-baul.md` | Alineado con FR-012/013 (límites *por entrenador*); dejar la puerta abierta a auth/multi-entrenador futuro sin remodelar el dominio — la URL ya anida por `trainerId` (`/trainers/{trainerId}/pokemon`) aunque hoy solo exista un valor válido. Recorte por tiempo: la lectura original de esta fila sugería multi-entrenador desde el día uno; se pospuso el CRUD, no el modelo. |
 | Ubicación de origen (A10) | **Texto libre** | Una captura puede no corresponder a ningún `Location` que PokéAPI conozca (evento, trade, etc.); acoplarlo a esa taxonomía limita casos legítimos. |
 | Fecha de captura (A11) | **Generada por el sistema** al crear el registro | Evita validar fechas provistas por el cliente; el PRD no pide poder declarar una fecha distinta a la del alta. |
 | Autenticación/autorización (omisión, no cubierta por ninguna ambigüedad puntual) | **Fuera de alcance**, decisión consciente y documentada | El PRD no la pide y no es el foco del challenge (dominio de negocio). Se deja una nota en DESIGN.md de cómo se agregaría (Spring Security + JWT, atado a la entidad Entrenador de A9) para cubrir "visión de evolución" sin gastar el tiempo limitado en implementarla. |
 | Stack — Spring Boot / Java (Dolor P6 del AS-IS) | **Revisado 2026-09-20 → Spring Boot 3.5.16 + Java 21** (reemplaza la decisión original de mantener 2.4.3/Java 11) | Ver `## Cambios` al final de este documento para el detalle completo. |
 | Bonus de evolución (A12, FR-024 a FR-028) | **No priorizado** para esta entrega | Se documenta en README/DESIGN.md como extensión identificada (diseño posible, no implementado) en vez de improvisarlo si sobra tiempo al final. |
+| Payload de captura — campo obligatorio y defaults (hallazgo H-01, `docs/reviews/adversarial-review-2026-09-21.md`) | Único obligatorio: `especie`. Defaults si se omite el resto: IVs=0, EVs=0, naturaleza `Hardy` (neutra), habilidad = primera de la especie según PokéAPI, shiny=`false`, género=Sin Género, movimientos=`[]`, held item=ninguno, pokéball=Poké Ball, nivel inicial=`1`, ubicación="Desconocida" | El PDF no distingue campos obligatorios de opcionales en la captura; sin esta decisión, la tabla de errores de la spec prometía un `400 Bad Request` que ningún escenario de aceptación probaba. Detalle completo en `docs/specs/001-equipo-activo-y-baul.md` § "Valores por defecto del payload de captura". |
+| Traducción de errores de PokéAPI (hallazgo H-02, `docs/reviews/adversarial-review-2026-09-21.md`) | `404` de PokéAPI (especie no existe) → `422`; `5xx`/conexión rechazada → `502 Bad Gateway`; timeout → `504 Gateway Timeout`, traducidos en el punto donde `TrainerRosterService` llama a `PokeApiClient` | Cierra el dolor P8 del AS-IS **en su totalidad** — la spec 001 originalmente solo traducía el caso puntual de especie inexistente y dejaba sin definir qué pasa si PokéAPI está caída o lenta durante la captura o el listado del Equipo Activo. |
+| `502` vs. `504` para fallas de PokéAPI (hallazgo H-09, `docs/reviews/adversarial-review-2026-09-21-r2.md`) | **Separados**: `504 Gateway Timeout` específicamente para timeout, `502 Bad Gateway` para `5xx`/conexión rechazada (reemplaza la unificación inicial bajo un único `502`) | Coherente con la diferenciación semántica que ya aplica el resto de la tabla de errores de la spec (`400` vs `422`); cierra una pregunta fácil de defensa técnica ("¿por qué no usaste 504 para el timeout?"). |
+| Timeout de llamadas a PokéAPI desde `skaro.trainer` (hallazgo H-10, `docs/reviews/adversarial-review-2026-09-21-r3.md`) | Propiedad nueva `skaro.trainer.pokeapi-call-timeout`, default **3s**, aplicada como `.timeout(Duration)` sobre el `Mono` de `PokeApiClient` en `TrainerRosterService` — no toca `skaro.pokeapi.client` ni su configuración | Sin esto, el cliente PokéAPI existente no tiene ningún timeout (verificado en `PokeApiReactorBaseConfiguration`) y la spec prometía un `504` que ningún valor concreto respaldaba — mismo patrón de hueco que motivó H-01/H-02. 3s por ser un default conservador para una API pública externa sin hacer esperar de más a un cliente HTTP. |
+| Concurrencia en validación de límites (hallazgo H-03, `docs/reviews/adversarial-review-2026-09-21.md`) | **Lock pesimista** sobre la fila del `Trainer` (`PESSIMISTIC_WRITE`) durante el ciclo check→insert/mover en `TrainerRosterService` | El PDF no lo pide, pero es un bug de concurrencia real (check-then-act) sobre un invariante de negocio explícito (6/300). Se prefirió sobre lock optimista o constraint de base por menor costo dado el plazo de entrega acotado del challenge — alternativas descartadas detalladas en `docs/DESIGN.md` D3. |
 
 ## Plan — próximas tareas, en orden
 
@@ -67,12 +72,37 @@ aplica, el dolor del AS-IS (`docs/AS-IS.md`) que la motiva.
 ✅ **Migración de stack** (Java 21 / Spring Boot 3.5.16) — completada el
 2026-09-20, ver `## Cambios`. Era parte de este plan, ya ejecutada.
 
-El modelo de concurrencia (A5) sigue **tentativo**: si al llegar a la spec
-de persistencia el costo de R2DBC es alto, se vuelve acá y se actualiza
-esta tabla con la fecha y el motivo del cambio, no se decide en silencio
-en medio de la implementación.
+Modelo de concurrencia (A5): revisado y cerrado, ver tabla de Decisiones y
+`## Cambios` (hallazgo H-07 de `docs/reviews/adversarial-review-2026-09-21-r2.md`
+— este párrafo decía "sigue tentativo" pese a que la tabla de arriba y
+`## Cambios` ya registraban la decisión definitiva).
 
 ## Cambios
+
+### 2026-09-21 — Modelo de concurrencia: R2DBC tentativo → JPA + `Schedulers.boundedElastic()` definitivo
+
+**Decisión original** (A5, esta misma tabla): WebFlux + R2DBC end-to-end,
+explícitamente tentativa — "a revisar en F4/DESIGN.md de la spec de
+persistencia si el esfuerzo de R2DBC resulta desproporcionado".
+
+**Por qué se revisó:** al llegar a F4 de `docs/specs/001-equipo-activo-y-baul.md`
+se evaluó el modelo de datos real de `PokemonInstance` — objetos
+embebidos (IVs/EVs), una colección (movimientos), varios enums y una
+relación `Trainer`→`PokemonInstance` uno-a-muchos. Spring Data R2DBC no
+soporta objetos embebidos, colecciones de elementos ni generación
+automática de schema; hubiera exigido mapeo manual fila a fila y un
+`schema.sql` a mano, con el plazo de entrega acotado del challenge.
+
+**Decisión:** JPA (Hibernate), con las llamadas bloqueantes aisladas
+dentro de `skaro.trainer.persistence` vía
+`Mono.fromCallable(...).subscribeOn(Schedulers.boundedElastic())` — el
+resto de la app (`domain`, `api`, y todo `skaro.pokeapi`) solo ve
+`Mono`/`Flux`, sin filtrar el modelo bloqueante hacia afuera. Detalle
+completo y alternativa descartada en `docs/DESIGN.md` (D1).
+
+**Qué no cambia:** el resto de las decisiones de esta tabla (límites,
+modelo de IVs, formato de ubicación, etc.) no dependen de esto y siguen
+igual.
 
 ### 2026-09-20 — Stack: Spring Boot 2.4.3/Java 11 → Spring Boot 3.5.16/Java 21
 
